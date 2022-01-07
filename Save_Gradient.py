@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Aug 16 17:24:19 2021
-@author: Eduin Hernandez
-"""
 import numpy
 import tensorflow as tf
 from tensorflow import keras
