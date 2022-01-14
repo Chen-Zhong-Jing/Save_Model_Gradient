@@ -24,6 +24,7 @@ def parse_args():
     
     'Save Details'
     parser.add_argument('--filepath', type=str, default='D:/Dewen/Cifar10/', help='Path used for saving the gradients and statistics')
+    parser.add_argument('--trial-num', type=int, default=0, help='Simulation index')
 
     args = parser.parse_args()
     return args
@@ -40,13 +41,16 @@ if not os.path.exists(args.filepath):
     assert False, '\"' + args.filepath + '\" Path does not exist'
 
 filepath = args.filepath + args.model_name + '/'
-# Check if subfolders exists, otherwise it creates them
+
+# Check if subfolders exists, otherwise outputs error
 if not os.path.exists(filepath):
     assert False, '\"' + filepath + '\" Path does not exist'
 filepath +=  args.optimizer + '/'
 if not os.path.exists(filepath):
     assert False, '\"' + filepath + '\" Path does not exist'
-    
+filepath +=  str(args.trial_num) + '/'
+if not os.path.exists(filepath):
+    assert False, '\"' + filepath + '\" Path does not exist'
 
 my_shelf = shelve.open(filepath + 'Accuracy_and_loss' + '.out', flag='r')
 data = my_shelf['data']
