@@ -1,186 +1,75 @@
-import numpy
+"""
+Created on Thu Jan 13 15:09:47 2022
+
+@author: Zhong-Jing
+@co-author: Eduin Hernandez
+Summary: Trains Classifications models and extracts the gradients for storage and future use.
+"""
+#------------------------------------------------------------------------------
+"""Libraries"""
+# Time
+import time
+
+# Storage
+import os
+# import shelve
+import pickle
+import argparse
+from utils.parser_utils import str2bool
+
+# Math
+import math
+import numpy as np
+
+# DNN
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.datasets import cifar10
-import shelve
-import numpy as np
-from scipy import stats
-import time
-import matplotlib.pyplot as plt
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-import argparse
-config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(allow_growth=True))
-sess = tf.compat.v1.Session(config=config)
+from models.cifar10_models import build_model
 
-# ------------------------------------------------------------------------------
+# Compressions
+# from utils.fp8 import fp8_152_bin_edges
+
+# Plotting
+import matplotlib.pyplot as plt
+# -----------------------------------------------------------------------------
+"Parser Arguments"
 def parse_args():
     parser = argparse.ArgumentParser(description='Variables for Cifar10 Training')
 
     'Model Details'
     parser.add_argument('--batch-size', type=int, default=64, help='Batch Size for Training and Testing')
     parser.add_argument('--epoch-num', type=int, default=100, help='End Iterations for Training')
-    parser.add_argument('--learning-rate', type=float, default=0.01, help='Learning Rate for model')
+    
+    parser.add_argument('--optimizer', type=str, default='Adam', help='Optimizer to use. Can be either SGD or Adam')
+    parser.add_argument('--learning-rate', type=float, default=0.001, help='Learning Rate for model')
     parser.add_argument('--momentum', type=float, default=0, help='Momentum for model')
-    parser.add_argument('--model-name', type=str, default='NASNetMobile', help='Model to Load for Training')
+    
+    parser.add_argument('--model-name', type=str, default='ResNet50V2', help='Model to Load for Training')
+    
+    'Print and Plot'
+    parser.add_argument('--plot-state', type=str2bool, default='True', help='Whether to plot the results')
+    parser.add_argument('--verbose-epoch', type=str2bool, default='True', help='Whether to print the accuracy results on a per batch basis')
+    parser.add_argument('--verbose-batch', type=str2bool, default='False', help='Whether to print the accuracy results on a per batch basis')
+    
+    'Save Details'
+    parser.add_argument('--filepath', type=str, default='D:/Dewen/Cifar10/', help='Path used for saving the gradients and statistics')
 
     args = parser.parse_args()
     return args
-
-
-# -----------------------------------------------------------------------------
-def DenseNet121(input):
-    return keras.applications.DenseNet121(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-    )
-
-
-def DenseNet169(input):
-    return keras.applications.DenseNet169(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-    )
-
-
-def DenseNet201(input):
-    return keras.applications.DenseNet201(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-    )
-
-
-def ResNet50(input):
-    return keras.applications.ResNet50(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-        classifier_activation="softmax",
-    )
-
-
-def ResNet101(input):
-    return keras.applications.ResNet101(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-        classifier_activation="softmax",
-    )
-
-
-def ResNet152(input):
-    return keras.applications.ResNet152(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-        classifier_activation="softmax",
-    )
-
-
-def ResNet50V2(input):
-    return keras.applications.ResNet50V2(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-        classifier_activation="softmax",
-    )
-
-
-def ResNet101V2(input):
-    return keras.applications.ResNet101V2(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-        classifier_activation="softmax",
-    )
-
-
-def ResNet152V2(input):
-    return keras.applications.ResNet152V2(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-        classifier_activation="softmax",
-    )
-
-
-def NASNetMobile(input):
-    return keras.applications.NASNetMobile(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10
-    )
-
-
-def NASNetLarge(input):
-    return keras.applications.NASNetLarge(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10
-    )
-
-
-def VGG16(input):
-    return keras.applications.VGG16(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-        classifier_activation="softmax"
-    )
-
-
-def VGG19(input):
-    return keras.applications.VGG19(
-        include_top=True,
-        weights=None,
-        input_tensor=None,
-        input_shape=input.shape[1:],
-        pooling=None,
-        classes=10,
-        #classifier_activation="softmax",
-    )
+#------------------------------------------------------------------------------
+"Global Configurations and Variables"
+config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(allow_growth=True))
+sess = tf.compat.v1.Session(config=config)
 
 tr_acc = tf.keras.metrics.CategoricalAccuracy()
 tr_loss = tf.keras.metrics.CategoricalCrossentropy()
 
+# fp8_bin_centers,fp8_bin_edges,fp8_dict = fp8_152_bin_edges()
+# ------------------------------------------------------------------------------
+"Functions"
+# Performs the optimizer update and extracts the gradients
 def step(X, y):
     # keep track of our gradients
     with tf.GradientTape() as tape:
@@ -205,95 +94,24 @@ def step(X, y):
         grads[idx] = grads[idx].numpy().flatten()
     return np.array(grads,dtype=object),np.mean(loss.numpy())
 
-
-build_model = {'DenseNet121': DenseNet121,
-               'DenseNet169': DenseNet169,
-               'DenseNet201': DenseNet201,
-               'ResNet50': ResNet50,
-               'ResNet50V2': ResNet50V2,
-               'ResNet101': ResNet101,
-               'ResNet101V2': ResNet101V2,
-               'ResNet152': ResNet152,
-               'ResNet152V2': ResNet152V2,
-               'NASNetMobile': NASNetMobile,
-               'NASNetLarge': NASNetLarge,
-               'VGG16': VGG16,
-               'VGG19': VGG19
-               }
 # -----------------------------------------------------------------------------
-
-
-def fp8_143_bin_edges(exponent_bias=10):
-    bin_centers = np.zeros(239,dtype=np.float32)
-    fp8_binary_dict = {}
-    fp8_binary_sequence = np.zeros(239, dtype='U8')
-    binary_fraction = np.array([2 ** -1, 2 ** -2, 2 ** -3],dtype=np.float32)
-    idx = 0
-    for s in range(2):
-        for e in range(15):
-            for f in range(8):
-                if e != 0:
-                    exponent = int(format(e, 'b').zfill(4), 2) - exponent_bias
-                    fraction = np.sum((np.array(list(format(f, 'b').zfill(3)), dtype=int) * binary_fraction)) + 1
-                    bin_centers[idx] = ((-1) ** (s)) * fraction * (2 ** exponent)
-                    fp8_binary_dict[str(bin_centers[idx])] = str(s) + format(e, 'b').zfill(4) + format(f, 'b').zfill(3)
-                    idx += 1
-                else:
-                    if f != 0:
-                        exponent = 1-exponent_bias
-                        fraction = np.sum((np.array(list(format(f, 'b').zfill(3)), dtype=int) * binary_fraction))
-                        bin_centers[idx] = ((-1) ** (s)) * fraction * (2 ** exponent)
-                        fp8_binary_dict[str(bin_centers[idx])] = str(s) + format(e, 'b').zfill(4) + format(f,'b').zfill(3)
-                        idx += 1
-                    else:
-                        if s == 0:
-                            bin_centers[idx] = 0
-                            fp8_binary_dict["0.0"] = "00000000"
-                            idx += 1
-                        else:
-                            pass
-    bin_centers = np.sort(bin_centers)
-    print(bin_centers)
-    bin_edges = (bin_centers[1:] + bin_centers[:-1]) * 0.5
-    return bin_centers, bin_edges, fp8_binary_dict
-
-def fp8_152_bin_edges(exponent_bias=15):
-    bin_centers = np.zeros(247,dtype=np.float32)
-    fp8_binary_dict = {}
-    fp8_binary_sequence = np.zeros(247, dtype='U8')
-    binary_fraction = np.array([2 ** -1, 2 ** -2],dtype=np.float32)
-    idx = 0
-    for s in range(2):
-        for e in range(31):
-            for f in range(4):
-                if e != 0:
-                    exponent = int(format(e, 'b').zfill(5), 2) - exponent_bias
-                    fraction = np.sum((np.array(list(format(f, 'b').zfill(2)), dtype=int) * binary_fraction)) + 1
-                    bin_centers[idx] = ((-1) ** (s)) * fraction * (2 ** exponent)
-                    fp8_binary_dict[str(bin_centers[idx])] = str(s) + format(e, 'b').zfill(5) + format(f, 'b').zfill(2)
-                    idx += 1
-                else:
-                    if f != 0:
-                        exponent = 1-exponent_bias
-                        fraction = np.sum((np.array(list(format(f, 'b').zfill(2)), dtype=int) * binary_fraction))
-                        bin_centers[idx] = ((-1) ** (s)) * fraction * (2 ** exponent)
-                        fp8_binary_dict[str(bin_centers[idx])] = str(s) + format(e, 'b').zfill(5) + format(f,'b').zfill(2)
-                        idx += 1
-                    else:
-                        if s == 0:
-                            bin_centers[idx] = 0
-                            fp8_binary_dict["0.0"] = "00000000"
-                            idx += 1
-                        else:
-                            pass
-    bin_centers = np.sort(bin_centers)
-    print(bin_centers)
-    bin_edges = (bin_centers[1:] + bin_centers[:-1]) * 0.5
-    return bin_centers, bin_edges, fp8_binary_dict
-
-fp8_bin_centers,fp8_bin_edges,fp8_dict = fp8_152_bin_edges()
-# -----------------------------------------------------------------------------
+"Preparing and Checking Parser"
 args = parse_args()
+
+if args.optimizer not in ['SGD', 'Adam']:
+    assert False, 'Optimizer not found'
+
+# Check if main path exists
+if not os.path.exists(args.filepath):
+    assert False, 'Path does not exist'
+filepath = args.filepath + args.model_name + '/'
+
+# Check if subfolders exists, otherwise it creates them
+if not os.path.exists(filepath):
+    os.makedirs(filepath)
+filepath +=  args.optimizer + '/'
+if not os.path.exists(filepath):
+    os.makedirs(filepath)
 # -----------------------------------------------------------------------------
 "Data Loading"
 # The data, split between train and test sets:
@@ -313,20 +131,6 @@ x_test = x_test.astype('float32')
 x_train /= 255
 x_test /= 255
 
-# -----------------------------------------------------------------------------
-"Model Creation"
-model = build_model[args.model_name](x_train)
-
-# initiate SGD optimizer
-opt = keras.optimizers.SGD(learning_rate=args.learning_rate,
-                           momentum=args.momentum)
-
-# Let's train the model using RMSprop
-model.compile(loss='categorical_crossentropy',
-              optimizer=opt,
-              metrics=['accuracy'])
-
-model.summary()
 # ------------------------------------------------------------------------------
 "Data augmentation"
 datagen = ImageDataGenerator(
@@ -343,21 +147,39 @@ datagen = ImageDataGenerator(
 
 datagen.fit(x_train)
 # -----------------------------------------------------------------------------
-# compute the number of batch updates per epoch
+"Model + Optimizer Definition"
+# Picking the Model
+model = build_model[args.model_name](x_train)
+
+# Initiate the optimizer
+if args.optimizer == 'SGD':
+    opt = keras.optimizers.SGD(learning_rate=args.learning_rate,
+                               momentum=args.momentum)
+elif args.optimizer == 'Adam':
+    opt = keras.optimizers.Adam(learning_rate=args.learning_rate)
+
+# Compile the model
+model.compile(loss='categorical_crossentropy',
+              optimizer=opt,
+              metrics=['accuracy'])
+
+# -----------------------------------------------------------------------------
+"Training the Model"
 batch_size = args.batch_size
 epoch_num = args.epoch_num
-numUpdates = int(x_train.shape[0] / batch_size)
+batch_total = math.ceil(len(x_train) / batch_size)
+
 train_acc = np.zeros(epoch_num)
 test_acc = np.zeros(epoch_num)
 train_loss = np.zeros(epoch_num)
 test_loss = np.zeros(epoch_num)
-filepath = "D:\\Zhong-Jing\\NASNetMobile\\"
-epochStart = time.time()
+
+elapsed = time.time()
 for epoch in range(epoch_num):
-    a0 = np.zeros(int(len(x_train) / batch_size) + 1)
-    l0 = np.zeros(int(len(x_train) / batch_size) + 1)
-    batches = 0
-    for x_batch,y_batch in datagen.flow(x_train, y_train, batch_size=batch_size):
+    epoch_time = time.time()
+    a0 = np.zeros(batch_total)
+    l0 = np.zeros(batch_total)
+    for batches, (x_batch,y_batch) in enumerate(datagen.flow(x_train, y_train, batch_size=batch_size)):
         grads,l1 = step(x_batch,y_batch)
 
         if batches == 0:
@@ -365,60 +187,70 @@ for epoch in range(epoch_num):
         avr_grads += grads
 
         a1 = tr_acc.result().numpy()
-        print("Training Accuracy: ",a1)
         a0[batches] = a1
         l0[batches] = l1
-        batches += 1
-
-        if batches >= len(x_train) / batch_size:
-            my_shelf = shelve.open(filepath + 'Gradient_epoch' + str(epoch) + '.out')
-            my_shelf['data'] = {'avr_grad': avr_grads/batches,'grads':grads}
-            my_shelf.close()
+        
+        if args.verbose_batch:
+            print('Batch #', batches, ' Acc:', str(f'{a1:0.4f}'))
+        
+        if (batches + 1) >= batch_total:
+            # my_shelf = shelve.open(filepath + 'Gradient_epoch' + str(epoch) + '.out')
+            # my_shelf['data'] = {'avr_grad': avr_grads/batches,'grads':grads}
+            # my_shelf.close()
+            
+            data = {'avr_grad': avr_grads/batches,
+                    'grads':grads}
+            
+            pickle.dump(data, open(filepath + 'Gradient_epoch' + str(epoch) + '.p', "wb" ))
+            
             break
 
     t_loss, t_acc = model.evaluate(x_test, y_test, batch_size=batch_size, verbose=0)
-    print("Epoch: " + str(epoch + 1) + '/' + str(epoch_num) + " Acc:" + str(f'{np.mean(a0): 0.3f}'))
+    
     train_acc[epoch] = np.mean(a0)
     test_acc[epoch] = t_acc
     train_loss[epoch] = np.mean(l0)
     test_loss[epoch] = t_loss
+    epoch_time = time.time() - epoch_time
+    
+    if args.verbose_epoch:
+        print("Epoch: " + str(epoch + 1) + '/' + str(epoch_num) + ", Acc:" + str(f'{np.mean(a0): 0.4f}') + ", Val Acc:" + str(f'{t_acc: 0.4f}') + ", Time: %ds" % (epoch_time))
+#------------------------------------------------------------------------------
+"Printing Remaining Statistics"
+elapsed = time.time() - elapsed
+print('Elapsed Time: %.2dD:%.2dH:%.2dM:%.2dS' % (elapsed / 86400, (elapsed / 3600) % 24, (elapsed / 60) % 60, elapsed % 60))
 
-epochEnd = time.time()
-elapsed = (epochEnd - epochStart) / 60.0
-print("took {:.4} minutes".format(elapsed))
+#------------------------------------------------------------------------------
+"Storing Statistics"
+# my_shelf = shelve.open(filepath + 'Accuracy_and_loss' + '.out')
+# my_shelf['data'] = {'training_acc': train_acc, 'test_acc': test_acc,'training_loss':train_loss,'test_loss':test_loss}
+# my_shelf.close()
 
-my_shelf = shelve.open(filepath + 'Accuracy_and_loss' + '.out')
-my_shelf['data'] = {'training_acc': train_acc, 'test_acc': test_acc,'training_loss':train_loss,'test_loss':test_loss}
-my_shelf.close()
-"""""""""
-"Training"
+data = {'training_acc': train_acc,
+        'test_acc': test_acc,
+        'training_loss':train_loss,
+        'test_loss':test_loss}
 
-hist = model.fit(x_train, y_train, batch_size=args.batch_size,
-                 epochs=args.epoch_num, verbose=1,
-                 validation_data=(x_test, y_test),
-                 shuffle=True)
+pickle.dump(data, open(filepath + 'Accuracy_and_loss' + '.p', "wb" ))
 
-accuracy = hist.history['accuracy']
-loss = hist.history['loss']
-
-accuracy_val = hist.history['val_accuracy']
-loss_val = hist.history['val_loss']
-# -----------------------------------------------------------------------------
-"Plotting"
-plt.close('all')
-plt.figure(1)
-plt.title('Accuracy')
-plt.plot(accuracy)
-plt.plot(accuracy_val)
-plt.xlabel('Epoch')
-plt.ylabel('Accuracy')
-plt.legend(['Train', 'Val'])
-
-plt.figure(2)
-plt.title('Loss')
-plt.plot(loss)
-plt.plot(loss_val)
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.legend(['Train', 'Val'])
-"""""""""
+#------------------------------------------------------------------------------
+"Plotting Results"
+if args.plot_state:
+    plt.close('all')
+    plt.figure()
+    plt.title('Accuracy for ' + args.model_name)
+    plt.plot(train_acc, label='Train')
+    plt.plot(test_acc, label='Val')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.grid()
+    
+    plt.figure()
+    plt.title('Loss for '+ args.model_name)
+    plt.plot(train_loss, label='Train')
+    plt.plot(test_loss, label='Val')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid()
